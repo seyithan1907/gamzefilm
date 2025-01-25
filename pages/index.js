@@ -289,10 +289,10 @@ export default function Home() {
         </div>
       )}
 
-      <main className="container mx-auto px-4 py-8 max-w-[2000px]">
-        <h2 className="text-4xl font-bold text-center mb-12 text-white">
-          Kişiselleştirilmiş Film ve Dizi Önerileri
-        </h2>
+      <main className="container mx-auto px-4 py-8">
+        <h1 className="text-4xl font-bold text-center mb-12 text-white">
+          AI Destekli Film ve Dizi Önerileri
+        </h1>
 
         {/* Popüler Filmler */}
         <section className="mb-12">
