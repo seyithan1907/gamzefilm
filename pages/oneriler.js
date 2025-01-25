@@ -5,6 +5,7 @@ import { supabase } from '../lib/supabase';
 import { StarIcon, CheckCircleIcon, ArrowPathIcon, SparklesIcon } from '@heroicons/react/24/solid';
 import { getImageUrl, fetchMovieRecommendations, fetchTVShowRecommendations } from '../services/tmdb';
 import { analyzeWatchHistory, getUserPreferences, rankContentByPreference } from '../services/recommendations';
+import { rankContentWithAI } from '../services/huggingface';
 
 export default function Recommendations() {
   const router = useRouter();
@@ -16,6 +17,7 @@ export default function Recommendations() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [progress, setProgress] = useState(0);
   const [onlyTurkish, setOnlyTurkish] = useState(false);
+  const [aiEnabled, setAiEnabled] = useState(true);
 
   useEffect(() => {
     // Oturum kontrolü
@@ -25,10 +27,46 @@ export default function Recommendations() {
         return;
       }
       setUser(session.user);
+      loadUserPreferences(session.user.id);
     });
 
     return () => subscription.unsubscribe();
   }, []);
+
+  // Kullanıcı tercihlerini yükle
+  const loadUserPreferences = async (userId) => {
+    const { data, error } = await supabase
+      .from('user_preferences')
+      .select('ai_enabled')
+      .eq('user_id', userId)
+      .single();
+
+    if (!error && data) {
+      setAiEnabled(data.ai_enabled);
+    }
+  };
+
+  // Yapay zeka durumunu değiştir
+  const toggleAI = async () => {
+    if (!user) return;
+
+    const newValue = !aiEnabled;
+    setAiEnabled(newValue);
+
+    const { error } = await supabase
+      .from('user_preferences')
+      .upsert({
+        user_id: user.id,
+        ai_enabled: newValue
+      });
+
+    if (error) {
+      console.error('Yapay zeka tercihi güncelleme hatası:', error);
+    } else {
+      // Önerileri yeniden yükle
+      loadWatchedContent(user.id);
+    }
+  };
 
   // Kullanıcı değiştiğinde içerikleri yükle
   useEffect(() => {
@@ -70,6 +108,9 @@ export default function Recommendations() {
         return;
       }
 
+      setMovieRecommendations([]); // Önerileri sıfırla
+      setShowRecommendations([]); // Önerileri sıfırla
+
       // Kullanıcı tercihlerini getir
       const userPreferences = await getUserPreferences(userId);
 
@@ -90,12 +131,42 @@ export default function Recommendations() {
         const watchedMovieIds = new Set(movies.map(m => m.movie_id));
         const uniqueMovieRecs = [...new Set(allMovieRecs.map(m => m.id))]
           .map(id => allMovieRecs.find(m => m.id === id))
-          .filter(movie => !watchedMovieIds.has(movie.id));
+          .filter(movie => !watchedMovieIds.has(movie.id))
+          .filter(movie => movie.overview && movie.overview.length > 0); // Açıklaması olan filmleri filtrele
 
-        // Önerileri filtrele ve sırala
+        // Önerileri filtrele
         const filteredMovies = filterTurkishContent(uniqueMovieRecs);
-        const rankedMovies = await rankContentByPreference(filteredMovies, userPreferences);
-        setMovieRecommendations(rankedMovies.slice(0, 14));
+        
+        let finalMovies;
+        if (aiEnabled) {
+          try {
+            console.log('AI film önerileri oluşturuluyor...');
+            // Son izlenen filmi referans al
+            const lastWatchedMovie = movies[movies.length - 1]?.movie_data;
+            if (lastWatchedMovie) {
+              finalMovies = await rankContentWithAI(
+                filteredMovies,
+                [lastWatchedMovie], // Sadece son izlenen filmi kullan
+                0.7 // Benzerlik eşiği
+              );
+              // İlk 500 öneriyi al ve rastgele 14 tanesini seç
+              const top500Movies = finalMovies.slice(0, 500);
+              finalMovies = top500Movies
+                .sort(() => Math.random() - 0.5) // Rastgele karıştır
+                .slice(0, 14); // İlk 14'ü al
+            } else {
+              finalMovies = await rankContentByPreference(filteredMovies, userPreferences);
+            }
+            console.log('AI film önerileri oluşturuldu:', finalMovies.length);
+          } catch (error) {
+            console.error('Yapay zeka film önerileri alınamadı:', error);
+            finalMovies = await rankContentByPreference(filteredMovies, userPreferences);
+          }
+        } else {
+          finalMovies = await rankContentByPreference(filteredMovies, userPreferences);
+        }
+        
+        setMovieRecommendations(finalMovies);
       }
 
       // Dizi önerileri
@@ -115,12 +186,42 @@ export default function Recommendations() {
         const watchedShowIds = new Set(shows.map(s => s.movie_id));
         const uniqueShowRecs = [...new Set(allShowRecs.map(s => s.id))]
           .map(id => allShowRecs.find(s => s.id === id))
-          .filter(show => !watchedShowIds.has(show.id));
+          .filter(show => !watchedShowIds.has(show.id))
+          .filter(show => show.overview && show.overview.length > 0); // Açıklaması olan dizileri filtrele
 
-        // Önerileri filtrele ve sırala
+        // Önerileri filtrele
         const filteredShows = filterTurkishContent(uniqueShowRecs);
-        const rankedShows = await rankContentByPreference(filteredShows, userPreferences);
-        setShowRecommendations(rankedShows.slice(0, 14));
+        
+        let finalShows;
+        if (aiEnabled) {
+          try {
+            console.log('AI dizi önerileri oluşturuluyor...');
+            // Son izlenen diziyi referans al
+            const lastWatchedShow = shows[shows.length - 1]?.movie_data;
+            if (lastWatchedShow) {
+              finalShows = await rankContentWithAI(
+                filteredShows,
+                [lastWatchedShow], // Sadece son izlenen diziyi kullan
+                0.7 // Benzerlik eşiği
+              );
+              // İlk 500 öneriyi al ve rastgele 14 tanesini seç
+              const top500Shows = finalShows.slice(0, 500);
+              finalShows = top500Shows
+                .sort(() => Math.random() - 0.5) // Rastgele karıştır
+                .slice(0, 14); // İlk 14'ü al
+            } else {
+              finalShows = await rankContentByPreference(filteredShows, userPreferences);
+            }
+            console.log('AI dizi önerileri oluşturuldu:', finalShows.length);
+          } catch (error) {
+            console.error('Yapay zeka dizi önerileri alınamadı:', error);
+            finalShows = await rankContentByPreference(filteredShows, userPreferences);
+          }
+        } else {
+          finalShows = await rankContentByPreference(filteredShows, userPreferences);
+        }
+        
+        setShowRecommendations(finalShows);
       }
 
     } catch (error) {
@@ -154,12 +255,17 @@ export default function Recommendations() {
     if (!user) return;
 
     try {
+      setIsRefreshing(true);
+      setProgress(0);
+
       const contentId = content.id;
       const contentData = {
         title: isShow ? content.name : content.title,
         poster_path: content.poster_path,
         vote_average: content.vote_average,
-        media_type: isShow ? 'tv' : 'movie'
+        overview: content.overview,
+        media_type: isShow ? 'tv' : 'movie',
+        genres: content.genres || []
       };
 
       const { error } = await supabase
@@ -174,10 +280,34 @@ export default function Recommendations() {
 
       if (error) throw error;
 
-      // Önerileri güncelle
-      loadWatchedContent(user.id);
+      // İzlenen içerikleri yeniden yükle
+      const { data: watchedData } = await supabase
+        .from('watched_movies')
+        .select('*')
+        .eq('user_id', user.id);
+
+      if (watchedData) {
+        setWatchedMovies(watchedData);
+        // Progress barı ilerlet
+        let progress = 0;
+        const interval = setInterval(() => {
+          progress += 5;
+          setProgress(progress);
+          if (progress >= 100) {
+            clearInterval(interval);
+            setIsRefreshing(false);
+          }
+        }, 50);
+
+        // Önerileri yeniden oluştur
+        await generateRecommendations(watchedData, user.id);
+      }
+
     } catch (error) {
       console.error('İçerik işaretleme hatası:', error);
+    } finally {
+      setIsRefreshing(false);
+      setProgress(100);
     }
   };
 
@@ -253,7 +383,7 @@ export default function Recommendations() {
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-900 to-black">
       <Head>
-        <title>Öneriler - Film Öneri</title>
+        <title>Kişiselleştirilmiş Öneriler - Film Öneri</title>
       </Head>
 
       <header className="bg-gray-800/50 backdrop-blur-sm sticky top-0 z-50">
@@ -287,12 +417,22 @@ export default function Recommendations() {
               </div>
 
               <button
+                onClick={toggleAI}
+                className={`flex items-center space-x-1 px-3 py-1 rounded-lg text-sm transition ${
+                  aiEnabled ? 'bg-purple-600 hover:bg-purple-700' : 'bg-gray-600 hover:bg-gray-700'
+                }`}
+              >
+                <SparklesIcon className="h-5 w-5" />
+                <span>{aiEnabled ? 'AI Öneriler' : 'Normal Öneriler'}</span>
+              </button>
+
+              <button
                 onClick={handleRefreshRecommendations}
+                className="flex items-center space-x-2 text-white hover:text-accent transition"
                 disabled={isRefreshing}
-                className="flex items-center space-x-2 text-white hover:text-accent transition disabled:opacity-50"
               >
                 <ArrowPathIcon className={`h-6 w-6 ${isRefreshing ? 'animate-spin' : ''}`} />
-                <span>Önerileri Yenile</span>
+                <span>Yenile</span>
               </button>
             </div>
           </div>

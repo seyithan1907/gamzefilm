@@ -47,54 +47,6 @@ export default function Home() {
     }
   };
 
-  // Film veya dizi izlendi olarak işaretle
-  const handleWatchContent = async (content, isShow = false) => {
-    if (!user) {
-      router.push('/giris');
-      return;
-    }
-
-    try {
-      const contentId = content.id;
-      const contentData = {
-        title: isShow ? content.name : content.title,
-        poster_path: content.poster_path,
-        vote_average: content.vote_average,
-        media_type: isShow ? 'tv' : 'movie'
-      };
-
-      if (watchedMovies.includes(contentId)) {
-        // İçeriği izlenenlerden kaldır
-        const { error } = await supabase
-          .from('watched_movies')
-          .delete()
-          .eq('user_id', user.id)
-          .eq('movie_id', contentId);
-
-        if (error) throw error;
-
-        setWatchedMovies(prev => prev.filter(id => id !== contentId));
-      } else {
-        // İçeriği izlenenlere ekle
-        const { error } = await supabase
-          .from('watched_movies')
-          .insert([
-            {
-              user_id: user.id,
-              movie_id: contentId,
-              movie_data: contentData
-            }
-          ]);
-
-        if (error) throw error;
-
-        setWatchedMovies(prev => [...prev, contentId]);
-      }
-    } catch (error) {
-      console.error('İçerik işaretleme hatası:', error);
-    }
-  };
-
   useEffect(() => {
     fetchPopularContent();
     fetchTopRatedContent();
@@ -285,7 +237,7 @@ export default function Home() {
             </div>
 
             <div className="flex items-center space-x-4">
-              {user ? (
+              {user && (
                 <>
                   <button
                     onClick={handleGetRecommendations}
@@ -309,14 +261,6 @@ export default function Home() {
                     <span>Çıkış Yap</span>
                   </button>
                 </>
-              ) : (
-                <button
-                  onClick={() => router.push('/giris')}
-                  className="flex items-center space-x-2 text-white hover:text-accent transition"
-                >
-                  <UserIcon className="h-6 w-6" />
-                  <span>Giriş Yap</span>
-                </button>
               )}
             </div>
           </div>
