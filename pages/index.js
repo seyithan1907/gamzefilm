@@ -237,7 +237,7 @@ export default function Home() {
             </div>
 
             <div className="flex items-center space-x-4">
-              {user && (
+              {user ? (
                 <>
                   <button
                     onClick={handleGetRecommendations}
@@ -259,6 +259,21 @@ export default function Home() {
                   >
                     <UserIcon className="h-6 w-6" />
                     <span>Çıkış Yap</span>
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    onClick={() => router.push('/giris')}
+                    className="text-white hover:text-accent transition"
+                  >
+                    Giriş Yap
+                  </button>
+                  <button
+                    onClick={() => router.push('/kayit')}
+                    className="bg-accent text-white px-4 py-2 rounded-lg hover:bg-accent/90 transition"
+                  >
+                    Üye Ol
                   </button>
                 </>
               )}
