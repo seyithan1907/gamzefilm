@@ -14,6 +14,7 @@ export default function Recommendations() {
   const [loading, setLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [progress, setProgress] = useState(0);
+  const [onlyTurkish, setOnlyTurkish] = useState(false);
 
   useEffect(() => {
     // Oturum kontrolü
@@ -47,6 +48,11 @@ export default function Recommendations() {
     }
   };
 
+  const filterTurkishContent = (content) => {
+    if (!onlyTurkish) return content;
+    return content.filter(item => item.original_language === 'tr');
+  };
+
   const generateRecommendations = async (watchedContent) => {
     try {
       // Film önerileri
@@ -63,8 +69,9 @@ export default function Recommendations() {
         .map(id => allMovieRecs.find(m => m.id === id))
         .filter(movie => !watchedMovieIds.has(movie.id));
 
-      // Önerileri karıştır ve ilk 14'ünü al
-      const shuffledMovies = uniqueMovieRecs
+      // Önerileri karıştır, filtrele ve ilk 14'ünü al
+      const filteredMovies = filterTurkishContent(uniqueMovieRecs);
+      const shuffledMovies = filteredMovies
         .sort(() => Math.random() - 0.5)
         .slice(0, 14);
 
@@ -84,8 +91,9 @@ export default function Recommendations() {
         .map(id => allShowRecs.find(s => s.id === id))
         .filter(show => !watchedShowIds.has(show.id));
 
-      // Önerileri karıştır ve ilk 14'ünü al
-      const shuffledShows = uniqueShowRecs
+      // Önerileri karıştır, filtrele ve ilk 14'ünü al
+      const filteredShows = filterTurkishContent(uniqueShowRecs);
+      const shuffledShows = filteredShows
         .sort(() => Math.random() - 0.5)
         .slice(0, 14);
 
@@ -212,14 +220,35 @@ export default function Recommendations() {
               Film Öneri
             </h1>
 
-            <button
-              onClick={handleRefreshRecommendations}
-              disabled={isRefreshing}
-              className="flex items-center space-x-2 text-white hover:text-accent transition disabled:opacity-50"
-            >
-              <ArrowPathIcon className={`h-6 w-6 ${isRefreshing ? 'animate-spin' : ''}`} />
-              <span>Önerileri Yenile</span>
-            </button>
+            <div className="flex items-center space-x-4">
+              <div className="flex items-center space-x-2">
+                <label className="text-white text-sm">Yalnızca Türkçe</label>
+                <button
+                  onClick={() => {
+                    setOnlyTurkish(!onlyTurkish);
+                    loadWatchedContent(user.id);
+                  }}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${
+                    onlyTurkish ? 'bg-accent' : 'bg-gray-600'
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                      onlyTurkish ? 'translate-x-6' : 'translate-x-1'
+                    }`}
+                  />
+                </button>
+              </div>
+
+              <button
+                onClick={handleRefreshRecommendations}
+                disabled={isRefreshing}
+                className="flex items-center space-x-2 text-white hover:text-accent transition disabled:opacity-50"
+              >
+                <ArrowPathIcon className={`h-6 w-6 ${isRefreshing ? 'animate-spin' : ''}`} />
+                <span>Önerileri Yenile</span>
+              </button>
+            </div>
           </div>
         </div>
       </header>
