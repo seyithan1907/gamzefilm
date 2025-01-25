@@ -43,4 +43,28 @@ export const fetchTVShowRecommendations = async (showId) => {
     console.error('Dizi önerileri getirme hatası:', error);
     return { results: [] };
   }
+};
+
+export const fetchLastMonthTopMovies = async () => {
+  const today = new Date();
+  const lastMonth = new Date(today.setMonth(today.getMonth() - 1));
+  const formattedLastMonth = lastMonth.toISOString().split('T')[0];
+  const formattedToday = new Date().toISOString().split('T')[0];
+
+  const response = await fetch(
+    `${BASE_URL}/discover/movie?api_key=${API_KEY}&language=tr-TR&sort_by=vote_count.desc&vote_count.gte=100&primary_release_date.gte=${formattedLastMonth}&primary_release_date.lte=${formattedToday}`
+  );
+  return response.json();
+};
+
+export const fetchLastMonthTopTVShows = async () => {
+  const today = new Date();
+  const lastMonth = new Date(today.setMonth(today.getMonth() - 1));
+  const formattedLastMonth = lastMonth.toISOString().split('T')[0];
+  const formattedToday = new Date().toISOString().split('T')[0];
+
+  const response = await fetch(
+    `${BASE_URL}/discover/tv?api_key=${API_KEY}&language=tr-TR&sort_by=vote_count.desc&vote_count.gte=50&first_air_date.gte=${formattedLastMonth}&first_air_date.lte=${formattedToday}`
+  );
+  return response.json();
 }; 

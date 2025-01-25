@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import Head from 'next/head';
 import { useRouter } from 'next/router';
-import { fetchPopularMovies, fetchPopularTVShows, fetchMovieRecommendations, searchMovies, getImageUrl } from '../services/tmdb';
+import { fetchPopularMovies, fetchPopularTVShows, searchMovies, getImageUrl } from '../services/tmdb';
 import { StarIcon, UserIcon, MagnifyingGlassIcon, CheckCircleIcon, SparklesIcon } from '@heroicons/react/24/solid';
 import { supabase } from '../lib/supabase';
 
@@ -12,8 +12,6 @@ export default function Home() {
   const [user, setUser] = useState(null);
   const [popularMovies, setPopularMovies] = useState([]);
   const [popularTVShows, setPopularTVShows] = useState([]);
-  const [topRatedMovies, setTopRatedMovies] = useState([]);
-  const [topRatedTVShows, setTopRatedTVShows] = useState([]);
   const [watchedMovies, setWatchedMovies] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
@@ -22,6 +20,8 @@ export default function Home() {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [progress, setProgress] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [topRatedMovies, setTopRatedMovies] = useState([]);
+  const [topRatedTVShows, setTopRatedTVShows] = useState([]);
 
   useEffect(() => {
     // Oturum durumunu kontrol et
@@ -103,20 +103,17 @@ export default function Home() {
   const fetchPopularContent = async () => {
     try {
       // Popüler filmleri getir
-      const moviesResponse = await fetch(
-        `https://api.themoviedb.org/3/movie/popular?api_key=${API_KEY}&language=tr-TR&page=1`
-      );
-      const moviesData = await moviesResponse.json();
+      const moviesData = await fetchPopularMovies();
       setPopularMovies(moviesData.results.slice(0, 14));
 
       // Popüler dizileri getir
-      const tvShowsResponse = await fetch(
-        `https://api.themoviedb.org/3/tv/popular?api_key=${API_KEY}&language=tr-TR&page=1`
-      );
-      const tvShowsData = await tvShowsResponse.json();
+      const tvShowsData = await fetchPopularTVShows();
       setPopularTVShows(tvShowsData.results.slice(0, 14));
+
+      setLoading(false);
     } catch (error) {
       console.error('Popüler içerik getirme hatası:', error);
+      setLoading(false);
     }
   };
 
@@ -333,7 +330,7 @@ export default function Home() {
               <SparklesIcon className="h-8 w-8 text-accent animate-pulse" />
             </div>
             <h3 className="text-xl text-white text-center mb-4">
-              Sizin için öneriler hazırlanıyor...
+              İzleme geçmişiniz analiz ediliyor...
             </h3>
             <div className="w-full bg-gray-700 rounded-full h-2 mb-4">
               <div 
@@ -342,7 +339,7 @@ export default function Home() {
               />
             </div>
             <p className="text-gray-400 text-center text-sm">
-              İzleme geçmişiniz analiz ediliyor ve size özel öneriler oluşturuluyor
+              Size en uygun içerikler belirleniyor
             </p>
           </div>
         </div>
@@ -358,10 +355,10 @@ export default function Home() {
           <h2 className="text-2xl font-semibold mb-6 text-white">Popüler Filmler</h2>
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-4">
             {popularMovies.map((movie) => (
-              <ContentCard 
+              <ContentCard
                 key={movie.id}
                 content={movie}
-                isWatched={watchedMovies.includes(movie.id)} 
+                isWatched={watchedMovies.includes(movie.id)}
               />
             ))}
           </div>
@@ -372,11 +369,11 @@ export default function Home() {
           <h2 className="text-2xl font-semibold mb-6 text-white">Popüler Diziler</h2>
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-4">
             {popularTVShows.map((show) => (
-              <ContentCard 
+              <ContentCard
                 key={show.id}
                 content={show}
                 isShow={true}
-                isWatched={watchedMovies.includes(show.id)} 
+                isWatched={watchedMovies.includes(show.id)}
               />
             ))}
           </div>

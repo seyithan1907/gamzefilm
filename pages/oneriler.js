@@ -4,6 +4,7 @@ import Head from 'next/head';
 import { supabase } from '../lib/supabase';
 import { StarIcon, CheckCircleIcon, ArrowPathIcon, SparklesIcon } from '@heroicons/react/24/solid';
 import { getImageUrl, fetchMovieRecommendations, fetchTVShowRecommendations } from '../services/tmdb';
+import { analyzeWatchHistory, getUserPreferences, rankContentByPreference } from '../services/recommendations';
 
 export default function Recommendations() {
   const router = useRouter();
@@ -24,11 +25,18 @@ export default function Recommendations() {
         return;
       }
       setUser(session.user);
-      loadWatchedContent(session.user.id);
     });
 
     return () => subscription.unsubscribe();
   }, []);
+
+  // Kullanıcı değiştiğinde içerikleri yükle
+  useEffect(() => {
+    if (user) {
+      loadWatchedContent(user.id);
+      analyzeUserPreferences(user.id);
+    }
+  }, [user]);
 
   const loadWatchedContent = async (userId) => {
     try {
@@ -39,8 +47,10 @@ export default function Recommendations() {
 
       if (error) throw error;
 
-      setWatchedMovies(data);
-      await generateRecommendations(data);
+      if (data) {
+        setWatchedMovies(data);
+        await generateRecommendations(data, userId);
+      }
     } catch (error) {
       console.error('İçerik yükleme hatası:', error);
     } finally {
@@ -53,53 +63,89 @@ export default function Recommendations() {
     return content.filter(item => item.original_language === 'tr');
   };
 
-  const generateRecommendations = async (watchedContent) => {
+  const generateRecommendations = async (watchedContent, userId) => {
     try {
+      if (!userId) {
+        console.error('Kullanıcı ID bulunamadı');
+        return;
+      }
+
+      // Kullanıcı tercihlerini getir
+      const userPreferences = await getUserPreferences(userId);
+
       // Film önerileri
       const movies = watchedContent.filter(item => item.movie_data.media_type === 'movie');
       const moviePromises = movies.map(movie => 
         fetchMovieRecommendations(movie.movie_id)
       );
-      const movieResults = await Promise.all(moviePromises);
-      const allMovieRecs = movieResults.flatMap(result => result.results || []);
-      
-      // Tekrarlanan önerileri kaldır ve izlenmeyen filmleri filtrele
-      const watchedMovieIds = new Set(movies.map(m => m.movie_id));
-      const uniqueMovieRecs = [...new Set(allMovieRecs.map(m => m.id))]
-        .map(id => allMovieRecs.find(m => m.id === id))
-        .filter(movie => !watchedMovieIds.has(movie.id));
 
-      // Önerileri karıştır, filtrele ve ilk 14'ünü al
-      const filteredMovies = filterTurkishContent(uniqueMovieRecs);
-      const shuffledMovies = filteredMovies
-        .sort(() => Math.random() - 0.5)
-        .slice(0, 14);
+      if (moviePromises.length === 0) {
+        console.log('İzlenen film bulunamadı');
+        setMovieRecommendations([]);
+      } else {
+        const movieResults = await Promise.all(moviePromises);
+        const allMovieRecs = movieResults.flatMap(result => result.results || []);
+        
+        // Tekrarlanan önerileri kaldır ve izlenmeyen filmleri filtrele
+        const watchedMovieIds = new Set(movies.map(m => m.movie_id));
+        const uniqueMovieRecs = [...new Set(allMovieRecs.map(m => m.id))]
+          .map(id => allMovieRecs.find(m => m.id === id))
+          .filter(movie => !watchedMovieIds.has(movie.id));
 
-      setMovieRecommendations(shuffledMovies);
+        // Önerileri filtrele ve sırala
+        const filteredMovies = filterTurkishContent(uniqueMovieRecs);
+        const rankedMovies = await rankContentByPreference(filteredMovies, userPreferences);
+        setMovieRecommendations(rankedMovies.slice(0, 14));
+      }
 
       // Dizi önerileri
       const shows = watchedContent.filter(item => item.movie_data.media_type === 'tv');
       const showPromises = shows.map(show => 
         fetchTVShowRecommendations(show.movie_id)
       );
-      const showResults = await Promise.all(showPromises);
-      const allShowRecs = showResults.flatMap(result => result.results || []);
 
-      // Tekrarlanan önerileri kaldır ve izlenmeyen dizileri filtrele
-      const watchedShowIds = new Set(shows.map(s => s.movie_id));
-      const uniqueShowRecs = [...new Set(allShowRecs.map(s => s.id))]
-        .map(id => allShowRecs.find(s => s.id === id))
-        .filter(show => !watchedShowIds.has(show.id));
+      if (showPromises.length === 0) {
+        console.log('İzlenen dizi bulunamadı');
+        setShowRecommendations([]);
+      } else {
+        const showResults = await Promise.all(showPromises);
+        const allShowRecs = showResults.flatMap(result => result.results || []);
 
-      // Önerileri karıştır, filtrele ve ilk 14'ünü al
-      const filteredShows = filterTurkishContent(uniqueShowRecs);
-      const shuffledShows = filteredShows
-        .sort(() => Math.random() - 0.5)
-        .slice(0, 14);
+        // Tekrarlanan önerileri kaldır ve izlenmeyen dizileri filtrele
+        const watchedShowIds = new Set(shows.map(s => s.movie_id));
+        const uniqueShowRecs = [...new Set(allShowRecs.map(s => s.id))]
+          .map(id => allShowRecs.find(s => s.id === id))
+          .filter(show => !watchedShowIds.has(show.id));
 
-      setShowRecommendations(shuffledShows);
+        // Önerileri filtrele ve sırala
+        const filteredShows = filterTurkishContent(uniqueShowRecs);
+        const rankedShows = await rankContentByPreference(filteredShows, userPreferences);
+        setShowRecommendations(rankedShows.slice(0, 14));
+      }
+
     } catch (error) {
       console.error('Öneri oluşturma hatası:', error);
+    }
+  };
+
+  const analyzeUserPreferences = async (userId) => {
+    setIsRefreshing(true);
+    setProgress(0);
+
+    try {
+      // İzleme geçmişini analiz et
+      const result = await analyzeWatchHistory(userId);
+      
+      if (result.success) {
+        console.log('Tür istatistikleri:', result.genreStats);
+        // İleriki adımlarda bu istatistikleri kullanacağız
+      }
+
+    } catch (error) {
+      console.error('Kullanıcı tercihleri analiz hatası:', error);
+    } finally {
+      setIsRefreshing(false);
+      setProgress(100);
     }
   };
 

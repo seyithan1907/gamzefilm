@@ -166,13 +166,39 @@ const FilmDetay = () => {
             Film Öneri
           </h1>
           <div className="flex items-center space-x-4">
-            <button className="bg-transparent hover:bg-gray-800 text-white px-4 py-2 rounded-md transition duration-300 border border-gray-600 flex items-center">
-              <UserIcon className="h-5 w-5 mr-2" />
-              Giriş Yap
-            </button>
-            <button className="bg-accent hover:bg-red-600 text-white px-4 py-2 rounded-md transition duration-300">
-              Üye Ol
-            </button>
+            {user ? (
+              <>
+                <button
+                  onClick={() => router.push(`/profil/${user.id}`)}
+                  className="text-white font-medium hover:text-accent transition"
+                >
+                  {user.user_metadata.full_name}
+                </button>
+                <button
+                  onClick={() => supabase.auth.signOut()}
+                  className="flex items-center space-x-2 text-white hover:text-accent transition"
+                >
+                  <UserIcon className="h-6 w-6" />
+                  <span>Çıkış Yap</span>
+                </button>
+              </>
+            ) : (
+              <>
+                <button 
+                  onClick={() => router.push('/giris')}
+                  className="bg-transparent hover:bg-gray-800 text-white px-4 py-2 rounded-md transition duration-300 border border-gray-600 flex items-center"
+                >
+                  <UserIcon className="h-5 w-5 mr-2" />
+                  Giriş Yap
+                </button>
+                <button 
+                  onClick={() => router.push('/uye-ol')}
+                  className="bg-accent hover:bg-red-600 text-white px-4 py-2 rounded-md transition duration-300"
+                >
+                  Üye Ol
+                </button>
+              </>
+            )}
           </div>
         </div>
       </header>

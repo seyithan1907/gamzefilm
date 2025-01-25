@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
 import { supabase } from '../../lib/supabase';
-import { StarIcon, CheckCircleIcon } from '@heroicons/react/24/solid';
+import { StarIcon, CheckCircleIcon, MagnifyingGlassIcon } from '@heroicons/react/24/solid';
 import { getImageUrl } from '../../services/tmdb';
 
 export default function UserProfile() {
@@ -13,6 +13,11 @@ export default function UserProfile() {
   const [loading, setLoading] = useState(true);
   const [lastRemoved, setLastRemoved] = useState(null);
   const [showUndo, setShowUndo] = useState(false);
+  const [movieSearch, setMovieSearch] = useState('');
+  const [showSearch, setShowSearch] = useState('');
+  const [currentMoviePage, setCurrentMoviePage] = useState(1);
+  const [currentShowPage, setCurrentShowPage] = useState(1);
+  const itemsPerPage = 14;
 
   useEffect(() => {
     if (!id) return;
@@ -136,6 +141,82 @@ export default function UserProfile() {
     </div>
   );
 
+  const filterAndPaginateContent = (items, searchTerm, currentPage) => {
+    // Önce arama filtresini uygula
+    const filtered = items.filter(item => 
+      item.movie_data.title.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+
+    // Toplam sayfa sayısını hesapla
+    const totalPages = Math.ceil(filtered.length / itemsPerPage);
+
+    // Sayfalama için dilimleme
+    const start = (currentPage - 1) * itemsPerPage;
+    const paginatedItems = filtered.slice(start, start + itemsPerPage);
+
+    return {
+      items: paginatedItems,
+      totalPages,
+      totalItems: filtered.length
+    };
+  };
+
+  const movies = watchedMovies.filter(item => item.movie_data.media_type === 'movie');
+  const shows = watchedMovies.filter(item => item.movie_data.media_type === 'tv');
+
+  const { items: paginatedMovies, totalPages: totalMoviePages } = filterAndPaginateContent(movies, movieSearch, currentMoviePage);
+  const { items: paginatedShows, totalPages: totalShowPages } = filterAndPaginateContent(shows, showSearch, currentShowPage);
+
+  const Pagination = ({ currentPage, totalPages, onPageChange }) => (
+    <div className="flex justify-center space-x-2 mt-4">
+      {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
+        <button
+          key={page}
+          onClick={() => onPageChange(page)}
+          className={`px-3 py-1 rounded ${
+            currentPage === page
+              ? 'bg-accent text-white'
+              : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+          }`}
+        >
+          {page}
+        </button>
+      ))}
+    </div>
+  );
+
+  const SearchInput = ({ value, onChange, placeholder }) => {
+    const inputRef = useRef(null);
+
+    useEffect(() => {
+      // Arama kutusuna tıklandığında odağı koru
+      const handleClick = (e) => {
+        if (inputRef.current && inputRef.current.contains(e.target)) {
+          inputRef.current.focus();
+        }
+      };
+
+      document.addEventListener('click', handleClick);
+      return () => document.removeEventListener('click', handleClick);
+    }, []);
+
+    return (
+      <div className="relative mb-4">
+        <input
+          ref={inputRef}
+          type="text"
+          value={value}
+          onChange={e => onChange(e.target.value)}
+          placeholder={placeholder}
+          autoComplete="off"
+          className="w-full bg-gray-700 text-white px-4 py-2 pl-10 rounded-lg focus:outline-none focus:ring-2 focus:ring-accent"
+          style={{ WebkitAppearance: 'none' }}
+        />
+        <MagnifyingGlassIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400 pointer-events-none" />
+      </div>
+    );
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-b from-gray-900 to-black flex items-center justify-center">
@@ -151,9 +232,6 @@ export default function UserProfile() {
       </div>
     );
   }
-
-  const movies = watchedMovies.filter(item => item.movie_data.media_type === 'movie');
-  const shows = watchedMovies.filter(item => item.movie_data.media_type === 'tv');
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-900 to-black">
@@ -182,21 +260,55 @@ export default function UserProfile() {
         </div>
 
         <section className="mb-12">
-          <h3 className="text-2xl font-semibold mb-6 text-white">İzlenen Filmler</h3>
+          <div className="flex justify-between items-center mb-6">
+            <h3 className="text-2xl font-semibold text-white">İzlenen Filmler</h3>
+          </div>
+          
+          <SearchInput 
+            value={movieSearch}
+            onChange={setMovieSearch}
+            placeholder="Film ara..."
+          />
+
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-7 gap-4">
-            {movies.map((item) => (
+            {paginatedMovies.map((item) => (
               <ContentCard key={item.id} item={item} type="film" />
             ))}
           </div>
+
+          {totalMoviePages > 1 && (
+            <Pagination
+              currentPage={currentMoviePage}
+              totalPages={totalMoviePages}
+              onPageChange={setCurrentMoviePage}
+            />
+          )}
         </section>
 
         <section className="mb-12">
-          <h3 className="text-2xl font-semibold mb-6 text-white">İzlenen Diziler</h3>
+          <div className="flex justify-between items-center mb-6">
+            <h3 className="text-2xl font-semibold text-white">İzlenen Diziler</h3>
+          </div>
+
+          <SearchInput 
+            value={showSearch}
+            onChange={setShowSearch}
+            placeholder="Dizi ara..."
+          />
+
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-7 gap-4">
-            {shows.map((item) => (
+            {paginatedShows.map((item) => (
               <ContentCard key={item.id} item={item} type="dizi" />
             ))}
           </div>
+
+          {totalShowPages > 1 && (
+            <Pagination
+              currentPage={currentShowPage}
+              totalPages={totalShowPages}
+              onPageChange={setCurrentShowPage}
+            />
+          )}
         </section>
 
         {showUndo && lastRemoved && (
