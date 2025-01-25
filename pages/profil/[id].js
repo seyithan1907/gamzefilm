@@ -11,7 +11,7 @@ export default function UserProfile() {
   const [user, setUser] = useState(null);
   const [watchedMovies, setWatchedMovies] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [lastRemoved, setLastRemoved] = useState(null);
+  const [deletedContent, setDeletedContent] = useState(null);
   const [showUndo, setShowUndo] = useState(false);
   const [movieSearch, setMovieSearch] = useState('');
   const [showSearch, setShowSearch] = useState('');
@@ -50,50 +50,57 @@ export default function UserProfile() {
     }
   };
 
-  const handleRemoveContent = async (item) => {
+  const handleDelete = async (content) => {
     try {
-      const { error } = await supabase
-        .from('watched_movies')
-        .delete()
-        .eq('id', item.id);
-
-      if (error) throw error;
-
-      setWatchedMovies(prev => prev.filter(m => m.id !== item.id));
-      setLastRemoved(item);
+      // Silinen içeriği sakla
+      setDeletedContent(content);
       setShowUndo(true);
+
+      // Listeden kaldır
+      setWatchedMovies(prev => prev.filter(item => item.id !== content.id));
+
+      // 5 saniye sonra veritabanından sil
+      setTimeout(async () => {
+        if (deletedContent?.id === content.id) {
+          const { error } = await supabase
+            .from('watched_movies')
+            .delete()
+            .eq('id', content.id);
+
+          if (error) throw error;
+
+          setShowUndo(false);
+          setDeletedContent(null);
+        }
+      }, 5000);
+
     } catch (error) {
-      console.error('İçerik kaldırma hatası:', error);
+      console.error('Silme hatası:', error);
     }
   };
 
-  // Geri alma bildirimi için zamanlayıcı
-  useEffect(() => {
-    let timer;
-    if (showUndo) {
-      timer = setTimeout(() => {
-        setShowUndo(false);
-        setLastRemoved(null);
-      }, 5000);
-    }
-    return () => {
-      if (timer) clearTimeout(timer);
-    };
-  }, [showUndo]);
-
   const handleUndo = async () => {
-    if (!lastRemoved) return;
+    if (!deletedContent) return;
 
     try {
+      // Veritabanına geri ekle
       const { error } = await supabase
         .from('watched_movies')
-        .insert([lastRemoved]);
+        .insert([{
+          user_id: id,
+          movie_id: deletedContent.movie_id,
+          movie_data: deletedContent.movie_data
+        }]);
 
       if (error) throw error;
 
-      setWatchedMovies(prev => [...prev, lastRemoved]);
+      // Listeye geri ekle
+      setWatchedMovies(prev => [...prev, deletedContent]);
+
+      // Geri al durumunu sıfırla
       setShowUndo(false);
-      setLastRemoved(null);
+      setDeletedContent(null);
+
     } catch (error) {
       console.error('Geri alma hatası:', error);
     }
@@ -115,7 +122,7 @@ export default function UserProfile() {
         <button
           onClick={(e) => {
             e.stopPropagation();
-            handleRemoveContent(item);
+            handleDelete(item);
           }}
           className="absolute top-2 right-2 bg-green-600 hover:bg-green-700 text-white rounded-full p-1 transition"
         >
@@ -311,14 +318,12 @@ export default function UserProfile() {
           )}
         </section>
 
-        {showUndo && lastRemoved && (
-          <div className="fixed bottom-4 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white px-6 py-3 rounded-lg shadow-lg flex items-center space-x-4">
-            <span>
-              "{lastRemoved.movie_data.title}" izlenenlerden kaldırıldı
-            </span>
+        {showUndo && (
+          <div className="fixed bottom-4 right-4 bg-gray-800 p-4 rounded-lg shadow-lg flex items-center space-x-4">
+            <p className="text-white">İçerik silindi</p>
             <button
               onClick={handleUndo}
-              className="bg-accent hover:bg-red-600 px-4 py-1 rounded transition"
+              className="text-accent hover:text-accent/80 transition"
             >
               Geri Al
             </button>

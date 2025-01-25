@@ -130,6 +130,58 @@ export default function Home() {
     }, 50); // 50ms aralıklarla güncelle
   };
 
+  // Film/Dizi izleme durumunu güncelle
+  const handleWatchContent = async (content, isShow = false) => {
+    if (!user) return;
+
+    try {
+      const contentId = content.id;
+      const isCurrentlyWatched = watchedMovies.includes(contentId);
+
+      if (isCurrentlyWatched) {
+        // İzlendi işaretini kaldır
+        const { error } = await supabase
+          .from('watched_movies')
+          .delete()
+          .eq('user_id', user.id)
+          .eq('movie_id', contentId);
+
+        if (error) throw error;
+
+        // İzlenen içeriklerden kaldır
+        setWatchedMovies(prev => prev.filter(id => id !== contentId));
+      } else {
+        // İzlendi olarak işaretle
+        const contentData = {
+          title: isShow ? content.name : content.title,
+          poster_path: content.poster_path,
+          vote_average: content.vote_average,
+          overview: content.overview,
+          media_type: isShow ? 'tv' : 'movie',
+          genres: content.genres || []
+        };
+
+        const { error } = await supabase
+          .from('watched_movies')
+          .insert([
+            {
+              user_id: user.id,
+              movie_id: contentId,
+              movie_data: contentData
+            }
+          ]);
+
+        if (error) throw error;
+
+        // İzlenen içeriklere ekle
+        setWatchedMovies(prev => [...prev, contentId]);
+      }
+
+    } catch (error) {
+      console.error('İçerik işaretleme hatası:', error);
+    }
+  };
+
   // Film/Dizi kartı bileşeni
   const ContentCard = ({ content, isShow = false, isWatched }) => (
     <div className="bg-gray-800 rounded-lg overflow-hidden shadow-lg transform hover:scale-105 transition duration-300">
