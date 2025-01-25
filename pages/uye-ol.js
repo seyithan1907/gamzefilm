@@ -89,20 +89,29 @@ export default function UyeOl() {
         throw signUpError;
       }
 
-      // Manuel olarak profil oluştur
-      const { error: profileError } = await supabase
+      // Önce profil var mı kontrol et
+      const { data: existingProfile } = await supabase
         .from('profiles')
-        .insert([
-          {
-            id: signUpData.user.id,
-            full_name: formData.name,
-            email: formData.email
-          }
-        ]);
+        .select('id')
+        .eq('id', signUpData.user.id)
+        .single();
 
-      if (profileError) {
-        console.error('Profil oluşturma hatası:', profileError);
-        throw new Error('Profil oluşturulurken bir hata oluştu');
+      // Profil yoksa oluştur
+      if (!existingProfile) {
+        const { error: profileError } = await supabase
+          .from('profiles')
+          .insert([
+            {
+              id: signUpData.user.id,
+              full_name: formData.name,
+              email: formData.email
+            }
+          ]);
+
+        if (profileError && !profileError.message.includes('duplicate')) {
+          console.error('Profil oluşturma hatası:', profileError);
+          throw new Error('Profil oluşturulurken bir hata oluştu');
+        }
       }
 
       // Otomatik giriş yap
