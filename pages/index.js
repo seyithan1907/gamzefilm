@@ -322,7 +322,7 @@ export default function Home() {
                     Giriş Yap
                   </button>
                   <button
-                    onClick={() => router.push('/kayit')}
+                    onClick={() => router.push('/uye-ol')}
                     className="bg-accent text-white px-4 py-2 rounded-lg hover:bg-accent/90 transition"
                   >
                     Üye Ol
