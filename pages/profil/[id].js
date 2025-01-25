@@ -11,8 +11,6 @@ export default function UserProfile() {
   const [user, setUser] = useState(null);
   const [watchedMovies, setWatchedMovies] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [deletedContent, setDeletedContent] = useState(null);
-  const [showUndo, setShowUndo] = useState(false);
   const [movieSearch, setMovieSearch] = useState('');
   const [showSearch, setShowSearch] = useState('');
   const [currentMoviePage, setCurrentMoviePage] = useState(1);
@@ -52,57 +50,19 @@ export default function UserProfile() {
 
   const handleDelete = async (content) => {
     try {
-      // Silinen içeriği sakla
-      setDeletedContent(content);
-      setShowUndo(true);
-
-      // Listeden kaldır
-      setWatchedMovies(prev => prev.filter(item => item.id !== content.id));
-
-      // 5 saniye sonra veritabanından sil
-      setTimeout(async () => {
-        if (deletedContent?.id === content.id) {
-          const { error } = await supabase
-            .from('watched_movies')
-            .delete()
-            .eq('id', content.id);
-
-          if (error) throw error;
-
-          setShowUndo(false);
-          setDeletedContent(null);
-        }
-      }, 5000);
-
-    } catch (error) {
-      console.error('Silme hatası:', error);
-    }
-  };
-
-  const handleUndo = async () => {
-    if (!deletedContent) return;
-
-    try {
-      // Veritabanına geri ekle
       const { error } = await supabase
         .from('watched_movies')
-        .insert([{
-          user_id: id,
-          movie_id: deletedContent.movie_id,
-          movie_data: deletedContent.movie_data
-        }]);
+        .delete()
+        .eq('user_id', id)
+        .eq('movie_id', content.movie_id);
 
       if (error) throw error;
 
-      // Listeye geri ekle
-      setWatchedMovies(prev => [...prev, deletedContent]);
-
-      // Geri al durumunu sıfırla
-      setShowUndo(false);
-      setDeletedContent(null);
+      // Listeden kaldır
+      setWatchedMovies(prev => prev.filter(item => item.movie_id !== content.movie_id));
 
     } catch (error) {
-      console.error('Geri alma hatası:', error);
+      console.error('Silme hatası:', error);
     }
   };
 
@@ -124,7 +84,7 @@ export default function UserProfile() {
             e.stopPropagation();
             handleDelete(item);
           }}
-          className="absolute top-2 right-2 bg-green-600 hover:bg-green-700 text-white rounded-full p-1 transition"
+          className="absolute top-2 right-2 bg-red-600 hover:bg-red-700 text-white rounded-full p-1 transition"
         >
           <CheckCircleIcon className="h-6 w-6" />
         </button>
@@ -317,18 +277,6 @@ export default function UserProfile() {
             />
           )}
         </section>
-
-        {showUndo && (
-          <div className="fixed bottom-4 right-4 bg-gray-800 p-4 rounded-lg shadow-lg flex items-center space-x-4">
-            <p className="text-white">İçerik silindi</p>
-            <button
-              onClick={handleUndo}
-              className="text-accent hover:text-accent/80 transition"
-            >
-              Geri Al
-            </button>
-          </div>
-        )}
       </main>
     </div>
   );
